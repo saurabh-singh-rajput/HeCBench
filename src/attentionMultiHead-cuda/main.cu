@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cuda.h>
+#include <nvml.h>
 
 #define FINAL_MASK 0xffffffff
 

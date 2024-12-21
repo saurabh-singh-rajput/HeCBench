@@ -6,6 +6,9 @@
 #include <cuda.h>
 #include "kernels.h"
 #include "reference.h"
+#include <nvml.h>
+#include "cuda_profiler.h"
+#include "thread_config.h"
 
 float* attention_device(const float* key, const float* value, const float* query,
                         const int n, const int d, const int impl_num, const int repeat)
@@ -37,14 +40,21 @@ float* attention_device(const float* key, const float* value, const float* query
 
   cudaDeviceSynchronize();
 
+  CUDAProfiler profiler;
+
   if (impl_num == 2) {
 
     auto start = std::chrono::steady_clock::now();
 
     for (int k = 0; k < repeat; k++) {
       cudaMemset(d_exp_sum, 0, 4);
+      profiler.startMeasurement("kernel1_warpReduce", (n+7)/8, 256);
       kernel1_warpReduce<<<(n+7)/8, 256>>>(d_key, d_query, d_dot_product, d_exp_sum, n, d);
+      profiler.stopMeasurement();
+
+      profiler.startMeasurement("kernel2_blockReduce", d, 256);
       kernel2_blockReduce<<<d, 256>>>(d_exp_sum, d_dot_product, d_value, d_output, n, d);
+      profiler.stopMeasurement();
     }
 
     cudaDeviceSynchronize();
@@ -88,6 +98,8 @@ float* attention_device(const float* key, const float* value, const float* query
     printf("Average execution time of kernels %f (ms)\n", time * 1e-6f / repeat);
     cudaFree(d_score);
   }
+
+  profiler.printMeasurements();
 
   cudaMemcpy(output, d_output, d * sizeof(float), cudaMemcpyDeviceToHost);
   cudaFree(d_value);

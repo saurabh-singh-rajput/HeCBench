@@ -6,7 +6,7 @@
 CC        = nvcc
 OPTIMIZE  = yes
 DEBUG     = no
-ARCH      = sm_60
+ARCH      = sm_86
 LAUNCHER  =
 
 #===============================================================================
@@ -27,7 +27,7 @@ obj = $(source:.cu=.o)
 CFLAGS := $(EXTRA_CFLAGS) -std=c++14 -Xcompiler -Wall -arch=$(ARCH)
 
 # Linker Flags
-LDFLAGS = 
+LDFLAGS = -lnvidia-ml
 
 # Debug Flags
 ifeq ($(DEBUG),yes)

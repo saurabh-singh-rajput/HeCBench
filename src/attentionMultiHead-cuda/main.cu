@@ -3,7 +3,68 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cuda.h>
-#include <cub/cub.cuh>
+#include <nvml.h>
+
+#define FINAL_MASK 0xffffffff
+
+__inline__ __device__
+float warpReduceSum(float val)
+{
+  for(int mask = 16; mask > 0; mask >>= 1)
+    val += __shfl_xor_sync(FINAL_MASK, val, mask, 32);
+  return val;
+}
+
+// Calculate the sum of all elements in a block
+__inline__ __device__
+float blockReduceSum(float val)
+{
+  static __shared__ float shared[32]; 
+  int lane = threadIdx.x & 0x1f; 
+  int wid = threadIdx.x >> 5;  
+
+  val = warpReduceSum(val);
+
+  if(lane == 0)
+    shared[wid] = val;
+
+  __syncthreads();
+
+
+  val = (threadIdx.x < (blockDim.x >> 5 )) ? shared[lane] : 0;
+  val = warpReduceSum(val);
+
+  return val;
+}
+
+__inline__ __device__
+float warpReduceMax(float val)
+{
+  for(int mask = 16; mask > 0; mask >>= 1)
+    val = max(val, __shfl_xor_sync(FINAL_MASK, val, mask, 32));
+  return val;
+}
+
+// Calculate the maximum of all elements in a block
+__inline__ __device__
+float blockReduceMax(float val)
+{
+  static __shared__ float shared[32]; 
+  int lane = threadIdx.x & 0x1f; // in-warp idx
+  int wid = threadIdx.x >> 5;  // warp idx
+
+  val = warpReduceMax(val); // get max in each warp
+
+  if(lane == 0) // record in-warp max by warp Idx
+    shared[wid] = val;
+
+  __syncthreads();
+
+  val = (threadIdx.x < (blockDim.x >> 5)) ? shared[lane] : 0;
+  val = warpReduceMax(val);
+
+  return val;
+}
 
 
 __global__
